@@ -110,6 +110,60 @@ def analyze_with_groq(results):
     if not results:
         return []
     
+    all_analyzed_dreams = []
+    batch_size = 5  # Rüyaları 5'erli gruplar halinde işleyelim
+    
+    print(f"🔄 Toplam {len(results)} sonuç, {batch_size}'erli gruplar halinde analiz edilecek...")
+
+    for i in range(0, len(results), batch_size):
+        batch = results[i:i + batch_size]
+        
+        results_text = '\n'.join([
+            f"[{j+1}] {r.get('title', '')}\n{r.get('snippet', '')}\n{r.get('link', '')}"
+            for j, r in enumerate(batch)
+        ])
+        
+        # BURAYA KENDİ ORİJİNAL PROMPTUNU KOYABİLİRSİN
+        prompt = f"""Sen uzman bir Jungian psikologsun. Aşağıdaki metinlerden sadece GERÇEK rüyaları ayıkla.
+        SONUÇLAR:
+        {results_text}
+        
+        Sadece saf JSON formatında dön, başka hiçbir açıklama yazma."""
+
+        try:
+            print(f"📡 Groq API'ye {i+1}-{i+len(batch)} arası kayıtlar için istek gönderiliyor...")
+            response = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={
+                    'Content-Type': 'application/json', 
+                    'Authorization': f'Bearer {GROQ_KEY}'
+                },
+                json={
+                    'model': 'llama-3.1-8b-instant', # veya kullandığın model
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'temperature': 0.3,
+                    'max_tokens': 3000 # Limiti yüksek tutuyoruz
+                },
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                content = response.json()['choices'][0]['message']['content']
+                extracted_json = extract_json_from_text(content)
+                
+                if extracted_json:
+                    all_analyzed_dreams.extend(extracted_json)
+                    print(f"✅ Bu gruptan {len(extracted_json)} rüya başarıyla analiz edildi.")
+                else:
+                    print("⚠️ Bu gruptan JSON ayıklanamadı veya rüya bulunamadı.")
+            else:
+                print(f"❌ Groq API Hatası: Kodu {response.status_code}")
+                
+        except Exception as e:
+            print(f"❌ Groq bağlantı/işleme hatası: {e}")
+            
+    return all_analyzed_dreams
+  
     results_text = '\n'.join([
         f"[{i+1}] {r.get('title', '')}\n{r.get('snippet', '')}\n{r.get('link', '')}"
         for i, r in enumerate(results[:10])
