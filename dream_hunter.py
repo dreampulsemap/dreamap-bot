@@ -129,7 +129,7 @@ SONUÇLAR:
 
 HER RÜYA İÇİN ŞU ALANLARI DOLDUR:
 
-1. ruya_metni: Temizlenmiş rüya metni (en az 50 kelime)
+1. ruya_metni: Temizlenmiş rüya metni (en az 2 kelime)
 2. dream_date: Rüyanın görüldüğü tarih (YYYY-MM-DD, metinden çıkar)
 3. dil: Dil kodu (en/tr/ru/ar/es/hi/zh/de)
 4. arketipler: Jungian arketipler array'i (örn: ["Shadow", "Anima", "Wise Old Man", "Great Mother", "Hero", "Trickster", "Self", "Snake", "Water", "Forest", "Door", "Tower"])
