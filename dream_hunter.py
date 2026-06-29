@@ -77,32 +77,53 @@ def search_dreams():
     
     print(f"🔗 Toplam {len(all_results)} benzersiz sonuç (duplikatlar çıkarıldı)")
     return all_results
-def extract_json_from_text(text):
-    """AI yanıtından saf JSON'u ayıkla"""
-    import re
     
-    # Önce direkt parse etmeyi dene
+def extract_json_from_text(text):
+    """AI yanıtından saf JSON'u ayıkla - GÜÇLENDİRİLDİ"""
+    import re
+    import json
+    
+    # 1. Önce direkt parse etmeyi dene
     try:
         return json.loads(text)
     except:
         pass
     
-    # [ ile başlayıp ] ile biten kısmı bul
-    match = re.search(r'\[.*\]', text, re.DOTALL)
+    # 2. ```json ... ``` bloklarını bul
+    match = re.search(r'```json\s*(\[.*?\])\s*```', text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            return json.loads(match.group(1))
         except:
             pass
     
-    # { ile başlayıp } ile biten kısmı bul
-    match = re.search(r'\{.*\}', text, re.DOTALL)
+    # 3. ``` ... ``` bloklarını bul
+    match = re.search(r'```\s*(\[.*?\])\s*```', text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            return json.loads(match.group(1))
         except:
             pass
     
+    # 4. [ ile başlayıp ] ile biten kısmı bul
+    match = re.search(r'(\[.*\])', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except:
+            pass
+    
+    # 5. { ile başlayıp } ile biten kısmı bul (tek obje olabilir)
+    match = re.search(r'(\{.*\})', text, re.DOTALL)
+    if match:
+        try:
+            # Tek objeyi array'e çevir
+            obj = json.loads(match.group(1))
+            return [obj]
+        except:
+            pass
+    
+    print(f"❌ JSON ayıklanamadı, içerik: {text[:500]}")
     return None
 
 def analyze_with_groq(results):
