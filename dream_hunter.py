@@ -228,36 +228,36 @@ Sadece JSON array döndür. Rüya yoksa [] döndür."""
         return []
 
 def save_to_supabase(dreams):
-    """Rüyaları Supabase'e kaydet - YENİ ALANLARLA"""
+    """Rüyaları Supabase'e kaydet - HAYALET HESAPLAR ÜZERİNDEN"""
     import random
     
     # Hayalet hesap ID'leri
     ghost_accounts = [
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333',
-        '44444444-4444-4444-4444-444444444444',
-        '55555555-5555-5555-5555-555555555555',
-        '66666666-6666-6666-6666-666666666666',
-        '77777777-7777-7777-7777-777777777777',
-        '88888888-8888-8888-8888-888888888888',
-        '99999999-9999-9999-9999-999999999999',
+        '22222222-2222-2222-2222-222222222222',  # @TheShadow
+        '33333333-3333-3333-3333-333333333333',  # @Anima
+        '44444444-4444-4444-4444-444444444444',  # @ZhouGong
+        '55555555-5555-5555-5555-555555555555',  # @DreamProphet
+        '66666666-6666-6666-6666-666666666666',  # @NightmareHunter
+        '77777777-7777-7777-7777-777777777777',  # @LucidMaster
+        '88888888-8888-8888-8888-888888888888',  # @DreamWeaver
+        '99999999-9999-9999-9999-999999999999',  # @ArchetypeSage
     ]
     
     saved = 0
     for dream in dreams:
         try:
+            # Rastgele bir hayalet hesap seç
             ghost_user_id = random.choice(ghost_accounts)
+            
             image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(dream['gorsel_prompt'])}?width=768&height=768&nologo=true"
             
             supabase.table('dreams').insert({
-                'user_id': ghost_user_id,
+                'user_id': ghost_user_id,  # HAYALET HESAP
                 'content': dream['ruya_metni'],
                 'dream_date': dream['dream_date'],
                 'original_language': dream['dil'],
                 'ai_archetypes': dream['arketipler'],
                 'ai_sentiment': dream['duygu'],
-                'ai_motiv': dream.get('motiv', 'Unknown'),  # YENİ
-                'ai_jungian_process': dream.get('jungian_surec', []),  # YENİ
                 'ai_summary': dream['ozet'],
                 'ai_image_prompt': dream['gorsel_prompt'],
                 'ai_image_url': image_url,
@@ -265,7 +265,7 @@ def save_to_supabase(dreams):
                 'location_name': dream.get('konum', 'Unknown')
             }).execute()
             saved += 1
-            print(f"✅ Kaydedildi: {dream['ozet'][:50]}...")
+            print(f"✅ Kaydedildi (@{ghost_accounts.index(ghost_user_id)}): {dream['ozet'][:50]}...")
         except Exception as e:
             print(f"❌ Kaydetme hatası: {e}")
     
