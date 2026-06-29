@@ -28,26 +28,54 @@ print(f"🔑 GROQ_KEY uzunluk: {len(GROQ_KEY)}")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def search_dreams():
-    """SerpAPI ile rüya ara"""
+    """SerpAPI ile SON 24 SAATTEKİ rüyaları ara"""
+    from datetime import datetime, timedelta
+    
+    # Dünün tarihini hesapla (SerpAPI tbs parametresi için)
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
+    today = datetime.now().strftime('%m/%d/%Y')
+    
+    # Son 24 saat filtre parametresi
+    time_filter = f'cdr:1,cd_min:{yesterday},cd_max:{today}'
+    
     queries = [
-        'I had a weird dream last night',
-        'strange dream I had',
-        'nightmare I had recently',
+        '"I had a dream last night"',
+        '"weird dream I had today"',
+        '"nightmare I had last night"',
+        '"dream journal" today',
+        '"I dreamed about" last night',
+        '"had a dream about" today',
+        '"strange dream" last night',
+        '"lucid dream" experience today',
+        '"I woke up from a dream"',
+        '"recurring dream" last night'
     ]
     
     all_results = []
+    seen_links = set()  # Duplicate engelleme
+    
     for query in queries:
         try:
-            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10'
+            # SerpAPI'de tarih filtresi
+            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10&tbs={requests.utils.quote(time_filter)}'
             response = requests.get(url, timeout=30)
             data = response.json()
             
             if 'organic_results' in data:
-                all_results.extend(data['organic_results'])
-                print(f"✅ {len(data['organic_results'])} sonuç: {query}")
+                new_count = 0
+                for result in data['organic_results']:
+                    link = result.get('link', '')
+                    if link not in seen_links:
+                        seen_links.add(link)
+                        all_results.append(result)
+                        new_count += 1
+                print(f"✅ {new_count} yeni sonuç ({len(data['organic_results'])} toplam): {query}")
+            else:
+                print(f"⚠️ Sonuç yok: {query}")
         except Exception as e:
-            print(f"⚠️ Hata ({query}): {e}")
+            print(f"❌ Hata ({query}): {e}")
     
+    print(f"🔗 Toplam {len(all_results)} benzersiz sonuç (duplikatlar çıkarıldı)")
     return all_results
 def extract_json_from_text(text):
     """AI yanıtından saf JSON'u ayıkla"""
