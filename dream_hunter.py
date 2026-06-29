@@ -228,7 +228,6 @@ Sadece JSON array döndür. Rüya yoksa [] döndür."""
         return []
 
 def save_to_supabase(dreams):
-def save_to_supabase(dreams):
     """Rüyaları Supabase'e kaydet - GÜVENLİ ALANLAR"""
     import random
     
