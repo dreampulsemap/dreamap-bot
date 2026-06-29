@@ -57,7 +57,7 @@ def search_dreams():
     for query in queries:
         try:
             # SerpAPI'de tarih filtresi
-            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10&tbs={requests.utils.quote(time_filter)}'
+            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=30&tbs={requests.utils.quote(time_filter)}'
             response = requests.get(url, timeout=30)
             data = response.json()
             
