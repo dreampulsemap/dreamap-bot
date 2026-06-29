@@ -49,9 +49,36 @@ def search_dreams():
             print(f"⚠️ Hata ({query}): {e}")
     
     return all_results
+def extract_json_from_text(text):
+    """AI yanıtından saf JSON'u ayıkla"""
+    import re
+    
+    # Önce direkt parse etmeyi dene
+    try:
+        return json.loads(text)
+    except:
+        pass
+    
+    # [ ile başlayıp ] ile biten kısmı bul
+    match = re.search(r'\[.*\]', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except:
+            pass
+    
+    # { ile başlayıp } ile biten kısmı bul
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except:
+            pass
+    
+    return None
 
 def analyze_with_groq(results):
-    """Groq ile rüyaları analiz et - BASİTLEŞTİRİLMİŞ"""
+    """Groq ile rüyaları analiz et - JSON AYIKLAMA EKLENDİ"""
     if not results:
         return []
     
@@ -64,6 +91,8 @@ def analyze_with_groq(results):
 
 SONUÇLAR:
 {results_text}
+
+ÖNEMLİ: SADECE saf JSON array döndür. Başına veya sonuna HİÇBİR açıklama yazma. Sadece [ ile başla ve ] ile bitir.
 
 JSON FORMATI:
 [
@@ -80,7 +109,7 @@ JSON FORMATI:
   }}
 ]
 
-Sadece JSON array döndür. Rüya yoksa [] döndür."""
+Rüya yoksa sadece [] döndür."""
     
     try:
         print(f"📡 Groq API'ye istek gönderiliyor...")
@@ -112,7 +141,14 @@ Sadece JSON array döndür. Rüya yoksa [] döndür."""
         
         print(f"📝 Groq içeriği (ilk 200 karakter): {content[:200]}")
         
-        result = json.loads(content)
+        # YENİ: JSON'u ayıkla
+        result = extract_json_from_text(content)
+        
+        if result is None:
+            print(f"❌ JSON ayıklanamadı!")
+            print(f"❌ Tam içerik: {content}")
+            return []
+        
         dreams = result if isinstance(result, list) else result.get('dreams', [])
         
         print(f"✅ Groq {len(dreams)} rüya döndürdü")
