@@ -79,17 +79,11 @@ def search_dreams():
     return all_results
     
 def extract_json_from_text(text):
-    """AI yanıtından saf JSON'u ayıkla - GÜÇLENDİRİLDİ"""
+    """AI yanıtından saf JSON'u ayıkla - SON DÜZENLEME"""
     import re
     import json
     
-    # 1. Önce direkt parse etmeyi dene
-    try:
-        return json.loads(text)
-    except:
-        pass
-    
-    # 2. ```json ... ``` bloklarını bul
+    # 1. ```json ... ``` bloklarını bul
     match = re.search(r'```json\s*(\[.*?\])\s*```', text, re.DOTALL)
     if match:
         try:
@@ -97,35 +91,25 @@ def extract_json_from_text(text):
         except:
             pass
     
-    # 3. ``` ... ``` bloklarını bul
-    match = re.search(r'```\s*(\[.*?\])\s*```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except:
-            pass
+    # 2. [ ile başlayıp ] ile biten kısmı bul
+    start = text.find('[')
+    end = text.rfind(']')
     
-    # 4. [ ile başlayıp ] ile biten kısmı bul
-    match = re.search(r'(\[.*\])', text, re.DOTALL)
-    if match:
+    if start != -1 and end != -1 and start < end:
+        json_str = text[start:end+1]
         try:
-            return json.loads(match.group(1))
+            return json.loads(json_str)
         except:
-            pass
-    
-    # 5. { ile başlayıp } ile biten kısmı bul (tek obje olabilir)
-    match = re.search(r'(\{.*\})', text, re.DOTALL)
-    if match:
-        try:
-            # Tek objeyi array'e çevir
-            obj = json.loads(match.group(1))
-            return [obj]
-        except:
-            pass
+            # Eğer hala hata veriyorsa, ] karakterinden sonra gelenleri temizle
+            # ve en son ]'e kadar olan kısmı al
+            clean_str = json_str.split('},')[0] + '}]'  # Son elemanı kapat
+            try:
+                return json.loads(clean_str)
+            except:
+                pass
     
     print(f"❌ JSON ayıklanamadı, içerik: {text[:500]}")
     return None
-
 def analyze_with_groq(results):
     """Groq ile rüyaları analiz et - JSON AYIKLAMA EKLENDİ"""
     if not results:
