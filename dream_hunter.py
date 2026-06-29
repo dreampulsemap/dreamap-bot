@@ -115,29 +115,68 @@ def analyze_with_groq(results):
         for i, r in enumerate(results[:10])
     ])
     
-    prompt = f"""Sen uzman bir rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla ve analiz et.
+    prompt = f"""Sen uzman bir Jungian psikolog ve rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla ve DERİNLEMESINE Jungian analizi yap.
+
+ÖNEMLİ: Sadece saf JSON array döndür. Başına veya sonuna HİÇBİR açıklama yazma.
 
 SONUÇLAR:
 {results_text}
 
-ÖNEMLİ: SADECE saf JSON array döndür. Başına veya sonuna HİÇBİR açıklama yazma. Sadece [ ile başla ve ] ile bitir.
+HER RÜYA İÇİN ŞU ALANLARI DOLDUR:
+
+1. ruya_metni: Temizlenmiş rüya metni (en az 50 kelime)
+2. dream_date: Rüyanın görüldüğü tarih (YYYY-MM-DD, metinden çıkar)
+3. dil: Dil kodu (en/tr/ru/ar/es/hi/zh/de)
+4. arketipler: Jungian arketipler array'i (örn: ["Shadow", "Anima", "Wise Old Man", "Great Mother", "Hero", "Trickster", "Self", "Snake", "Water", "Forest", "Door", "Tower"])
+5. duygu: Ana duygu (Fear/Anxiety/Awe/Joy/Confusion/Peace/Sadness/Anger/Disgust/Surprise)
+6. motiv: Rüyanın altında yatan psikolojik motivasyon (1 cümle,örn: "Bilinçdışındaki bastırılmış korkuların yüzeye çıkması")
+7. jungian_surec: Jungian süreç etiketleri array'i (örn: ["Shadow Integration", "Individuation", "Anima Projection", "Collective Unconscious Activation", "Persona Dissolution", "Self Realization", "Transformation", "Rebirth"])
+8. ozet: 2-3 cümlelik DERİN Jungian analiz (arketipler, motiv, süreç dahil)
+9. gorsel_prompt: İngilizce AI görsel promptu (surreal, Jungian archetype, cinematic lighting, 8k, dreamlike atmosphere, 60-80 kelime)
+10. kaynak_url: Orijinal link
+11. konum: Tahmini konum (yoksa "Unknown")
+
+JUNGIAN ARKETİPLER LİSTESİ:
+- Shadow (Gölge): Bastırılmış karanlık taraf
+- Anima/Animus: İçsel karşı cins
+- Wise Old Man/Wise Woman: Bilge rehber
+- Great Mother: Ana arketip
+- Hero: Kahraman yolculuğu
+- Trickster: Hilebaz/dönüştürücü
+- Self: Bütünleşmiş benlik
+- Persona: Sosyal maske
+- Child: İç çocuk/yenilenme
+
+JUNGIAN SÜREÇLER LİSTESİ:
+- Shadow Integration: Gölge ile yüzleşme ve bütünleşme
+- Individuation: Bireyleşme süreci
+- Anima/Animus Integration: İç karşı cins ile bütünleşme
+- Collective Unconscious Activation: Kolektif bilinçdışı aktivasyonu
+- Persona Dissolution: Sosyal maskenin çözülmesi
+- Self Realization: Benlik realization'ı
+- Transformation: Dönüşüm
+- Rebirth: Yeniden doğuş
+- Initiation: İnisiyasyon/geçiş ritüeli
+- Nigredo/Albedo/Rubedo: Simyasal dönüşüm aşamaları
 
 JSON FORMATI:
 [
   {{
-    "ruya_metni": "Temizlenmiş rüya metni",
-    "dream_date": "2025-01-16",
+    "ruya_metni": "...",
+    "dream_date": "YYYY-MM-DD",
     "dil": "en",
     "arketipler": ["Shadow", "Snake"],
     "duygu": "Fear",
-    "ozet": "1 cümlelik analiz",
-    "gorsel_prompt": "surreal dark forest snake cinematic",
-    "kaynak_url": "link",
+    "motiv": "Bilinçdışındaki bastırılmış korkuların yüzeye çıkması",
+    "jungian_surec": ["Shadow Integration", "Transformation"],
+    "ozet": "Bu rüya, Shadow arketipinin Snake sembolü üzerinden yüzeye çıkışını temsil eder...",
+    "gorsel_prompt": "surreal dark forest giant snake...",
+    "kaynak_url": "...",
     "konum": "Unknown"
   }}
 ]
 
-Rüya yoksa sadece [] döndür."""
+Sadece JSON array döndür. Rüya yoksa [] döndür."""
     
     try:
         print(f"📡 Groq API'ye istek gönderiliyor...")
