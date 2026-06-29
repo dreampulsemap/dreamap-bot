@@ -110,7 +110,7 @@ def analyze_with_groq(results):
     if not results:
         return []
         
-      results_text = '\n'.join([
+    results_text = '\n'.join([
         f"[{i+1}] {r.get('title', '')}\n{r.get('snippet', '')}\n{r.get('link', '')}"
         for i, r in enumerate(results[:10])
     ])
