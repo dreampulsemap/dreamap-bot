@@ -173,15 +173,19 @@ JSON FORMATI:
     "dream_date": "YYYY-MM-DD",
     "dil": "en/tr/ru/ar/es/hi/zh/de",
     "arketipler": ["Shadow", "Snake"],
-    "duygu": "Fear/Anxiety/Awe/Joy/Confusion/Peace/Sadness/Anger/Surprise",
+    "duygu": "Fear",
     "motiv": "1 cümlelik psikolojik motivasyon",
-    "jungian_surec": ["Shadow Integration", "Transformation"],
+    "jungian_surec": ["Shadow Integration"],
     "ozet": "2-3 cümlelik Jungian analiz",
     "gorsel_prompt": "surreal Jungian cinematic 8k",
     "kaynak_url": "link",
-    "konum": "City, Country"
+    "konum": "Istanbul, Turkey",
+    "lat": 41.0082,
+    "lng": 28.9784
   }}
 ]
+
+NOT: lat ve lng MUTLAKA sayı olmalı (örn: 41.0082). Bilinmiyorsa 0 yaz.
 
 Sadece JSON array döndür."""
     
