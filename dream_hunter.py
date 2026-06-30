@@ -1,10 +1,15 @@
 import requests
 import json
 import os
+import re
+import random
+import time
 from datetime import datetime
 from supabase import create_client
 
-# API anahtarları
+# ============================================
+# 🔑 API ANAHTARLARI
+# ============================================
 SERPAPI_KEY = os.environ.get('SERPAPI_KEY')
 GROQ_KEY = os.environ.get('GROQ_KEY')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
@@ -19,7 +24,6 @@ if not all([SERPAPI_KEY, GROQ_KEY, SUPABASE_URL, SUPABASE_KEY]):
     print(f"SUPABASE_KEY: {'✅' if SUPABASE_KEY else '❌'}")
     exit(1)
 
-# Groq key'in başını ve sonunu göster (debug için)
 print(f"🔑 GROQ_KEY başı: {GROQ_KEY[:10]}...")
 print(f"🔑 GROQ_KEY sonu: ...{GROQ_KEY[-10:]}")
 print(f"🔑 GROQ_KEY uzunluk: {len(GROQ_KEY)}")
@@ -27,37 +31,87 @@ print(f"🔑 GROQ_KEY uzunluk: {len(GROQ_KEY)}")
 # Supabase client
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Hayalet hesaplar
+GHOST_ACCOUNTS = [
+    '22222222-2222-2222-2222-222222222222',
+    '33333333-3333-3333-3333-333333333333',
+    '44444444-4444-4444-4444-444444444444',
+    '55555555-5555-5555-5555-555555555555',
+    '66666666-6666-6666-6666-666666666666',
+    '77777777-7777-7777-7777-777777777777',
+    '88888888-8888-8888-8888-888888888888',
+    '99999999-9999-9999-9999-999999999999',
+]
+
+# ============================================
+# 🔍 JSON AYIKLAMA
+# ============================================
+def extract_json_from_text(text):
+    """AI yanıtından saf JSON'u ayıkla"""
+    if not text:
+        return None
+    
+    # 1. Direkt parse
+    try:
+        return json.loads(text)
+    except:
+        pass
+    
+    # 2. ```json blokları
+    match = re.search(r'```(?:json)?\s*(\[[\s\S]*?\])\s*```', text)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except:
+            pass
+    
+    # 3. [ ile başlayıp ] ile biten
+    start = text.find('[')
+    end = text.rfind(']')
+    if start != -1 and end != -1 and start < end:
+        json_str = text[start:end+1]
+        try:
+            return json.loads(json_str)
+        except:
+            pass
+    
+    # 4. Tek obje { }
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and start < end:
+        json_str = text[start:end+1]
+        try:
+            obj = json.loads(json_str)
+            return [obj]
+        except:
+            pass
+    
+    return None
+
+# ============================================
+# 🔎 SERPAPI ARAMA
+# ============================================
 def search_dreams():
-    """SerpAPI ile SON 24 SAATTEKİ rüyaları ara"""
-    from datetime import datetime, timedelta
-    
-    # Dünün tarihini hesapla (SerpAPI tbs parametresi için)
-    yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
-    today = datetime.now().strftime('%m/%d/%Y')
-    
-    # Son 24 saat filtre parametresi
-    time_filter = f'cdr:1,cd_min:{yesterday},cd_max:{today}'
-    
+    """SerpAPI ile rüya ara"""
     queries = [
-        '"I had a dream last night"',
-        '"weird dream I had today"',
-        '"nightmare I had last night"',
-        '"dream journal" today',
-        '"I dreamed about" last night',
-        '"had a dream about" today',
-        '"strange dream" last night',
-        '"lucid dream" experience today',
-        '"I woke up from a dream"',
-        '"recurring dream" last night'
+        'I had a dream last night',
+        'weird dream I had today',
+        'nightmare I had last night',
+        'dream journal today',
+        'I dreamed about last night',
+        'had a dream about today',
+        'strange dream last night',
+        'lucid dream experience today',
+        'I woke up from a dream',
+        'recurring dream last night'
     ]
     
     all_results = []
-    seen_links = set()  # Duplicate engelleme
+    seen_links = set()
     
     for query in queries:
         try:
-            # SerpAPI'de tarih filtresi
-            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10&tbs={requests.utils.quote(time_filter)}'
+            url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10'
             response = requests.get(url, timeout=30)
             data = response.json()
             
@@ -65,7 +119,7 @@ def search_dreams():
                 new_count = 0
                 for result in data['organic_results']:
                     link = result.get('link', '')
-                    if link not in seen_links:
+                    if link and link not in seen_links:
                         seen_links.add(link)
                         all_results.append(result)
                         new_count += 1
@@ -75,64 +129,22 @@ def search_dreams():
         except Exception as e:
             print(f"❌ Hata ({query}): {e}")
     
-    print(f"🔗 Toplam {len(all_results)} benzersiz sonuç (duplikatlar çıkarıldı)")
+    print(f"🔗 Toplam {len(all_results)} benzersiz sonuç")
     return all_results
+
+# ============================================
+# 🧠 GROQ ANALİZ (PARÇALI)
+# ============================================
+def analyze_chunk(chunk, chunk_num, total_chunks):
+    """Bir parça sonucu analiz et"""
+    print(f"\n📦 Parça {chunk_num}/{total_chunks} işleniyor ({len(chunk)} sonuç)...")
     
-def extract_json_from_text(text):
-    """AI yanıtından saf JSON'u ayıkla - SON DÜZENLEME"""
-    import re
-    import json
+    results_text = '\n'.join([
+        f"[{j+1}] {r.get('title', '')}\n{r.get('snippet', '')}\n{r.get('link', '')}"
+        for j, r in enumerate(chunk)
+    ])
     
-    # 1. ```json ... ``` bloklarını bul
-    match = re.search(r'```json\s*(\[.*?\])\s*```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except:
-            pass
-    
-    # 2. [ ile başlayıp ] ile biten kısmı bul
-    start = text.find('[')
-    end = text.rfind(']')
-    
-    if start != -1 and end != -1 and start < end:
-        json_str = text[start:end+1]
-        try:
-            return json.loads(json_str)
-        except:
-            # Eğer hala hata veriyorsa, ] karakterinden sonra gelenleri temizle
-            # ve en son ]'e kadar olan kısmı al
-            clean_str = json_str.split('},')[0] + '}]'  # Son elemanı kapat
-            try:
-                return json.loads(clean_str)
-            except:
-                pass
-    
-    print(f"❌ JSON ayıklanamadı, içerik: {text[:500]}")
-    return None
-    
-def analyze_with_groq(results):
-    """Groq ile rüyaları analiz et - PARÇALI ANALİZ"""
-    if not results:
-        return []
-    
-    all_dreams = []
-    chunk_size = 10  # Her seferde 10 sonuç gönder
-    
-    # Sonuçları parçalara böl
-    for i in range(0, len(results), chunk_size):
-        chunk = results[i:i+chunk_size]
-        chunk_num = (i // chunk_size) + 1
-        total_chunks = (len(results) + chunk_size - 1) // chunk_size
-        
-        print(f"\n📦 Parça {chunk_num}/{total_chunks} işleniyor ({len(chunk)} sonuç)...")
-        
-        results_text = '\n'.join([
-            f"[{j+1}] {r.get('title', '')}\n{r.get('snippet', '')}\n{r.get('link', '')}"
-            for j, r in enumerate(chunk)
-        ])
-        
-        prompt = f"""Sen uzman bir Jungian psikolog ve rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla ve DERİNLEMESINE Jungian analizi yap.
+    prompt = f"""Sen uzman bir Jungian psikolog ve rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla ve DERİNLEMESINE Jungian analizi yap.
 
 ÖNEMLİ: Sadece saf JSON array döndür. Başına veya sonuna HİÇBİR açıklama yazma.
 
@@ -171,96 +183,104 @@ JSON FORMATI:
 ]
 
 Sadece JSON array döndür. Rüya yoksa [] döndür."""
+    
+    try:
+        response = requests.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + GROQ_KEY
+            },
+            json={
+                'model': 'llama-3.1-8b-instant',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': 0.3,
+                'max_tokens': 4000
+            },
+            timeout=60
+        )
         
-        try:
-            response = requests.post(
-                'https://api.groq.com/openai/v1/chat/completions',
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + GROQ_KEY
-                },
-                json={
-                    'model': 'llama-3.1-8b-instant',
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'temperature': 0.3,
-                    'max_tokens': 4000  # Daha fazla token
-                },
-                timeout=60
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Groq API hatası: {response.status_code}")
-                continue
-            
-            data = response.json()
-            content = data['choices'][0]['message']['content']
-            
-            # JSON'u ayıkla
-            result = extract_json_from_text(content)
-            
-            if result is None:
-                print(f"⚠️ Parça {chunk_num}: JSON ayıklanamadı")
-                continue
-            
-            dreams = result if isinstance(result, list) else result.get('dreams', [])
-            print(f"✅ Parça {chunk_num}: {len(dreams)} rüya bulundu")
-            all_dreams.extend(dreams)
-            
-            # Rate limit için bekle
-            if i + chunk_size < len(results):
-                print("⏳ 2 saniye bekleniyor...")
-                import time
-                time.sleep(2)
-                
-        except Exception as e:
-            print(f"❌ Parça {chunk_num} hatası: {e}")
-            continue
+        if response.status_code != 200:
+            print(f"❌ Groq API hatası: {response.status_code}")
+            return []
+        
+        data = response.json()
+        content = data['choices'][0]['message']['content']
+        
+        print(f"📝 Parça {chunk_num} yanıtı (ilk 200 karakter): {content[:200]}")
+        
+        result = extract_json_from_text(content)
+        
+        if result is None:
+            print(f"⚠️ Parça {chunk_num}: JSON ayıklanamadı")
+            return []
+        
+        dreams = result if isinstance(result, list) else result.get('dreams', [])
+        print(f"✅ Parça {chunk_num}: {len(dreams)} rüya bulundu")
+        return dreams
+        
+    except Exception as e:
+        print(f"❌ Parça {chunk_num} hatası: {e}")
+        return []
+
+def analyze_with_groq(results):
+    """Groq ile rüyaları analiz et - PARÇALI ANALİZ"""
+    if not results:
+        return []
+    
+    all_dreams = []
+    chunk_size = 10
+    total_chunks = (len(results) + chunk_size - 1) // chunk_size
+    
+    for i in range(0, len(results), chunk_size):
+        chunk = results[i:i+chunk_size]
+        chunk_num = (i // chunk_size) + 1
+        
+        dreams = analyze_chunk(chunk, chunk_num, total_chunks)
+        all_dreams.extend(dreams)
+        
+        # Rate limit için bekle
+        if i + chunk_size < len(results):
+            print("⏳ 2 saniye bekleniyor...")
+            time.sleep(2)
     
     print(f"\n🎯 Toplam {len(all_dreams)} rüya bulundu")
     return all_dreams
-        
-    except Exception as e:
-        print(f"❌ Groq hatası: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
 
+# ============================================
+# 💾 SUPABASE'E KAYDET
+# ============================================
 def save_to_supabase(dreams):
-    """Rüyaları Supabase'e kaydet - GÜVENLİ ALANLAR"""
-    import random
-    
-    # Hayalet hesap ID'leri
-    ghost_accounts = [
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333',
-        '44444444-4444-4444-4444-444444444444',
-        '55555555-5555-5555-5555-555555555555',
-        '66666666-6666-6666-6666-666666666666',
-        '77777777-7777-7777-7777-777777777777',
-        '88888888-8888-8888-8888-888888888888',
-        '99999999-9999-9999-9999-999999999999',
-    ]
-    
+    """Rüyaları Supabase'e kaydet"""
     saved = 0
     for dream in dreams:
         try:
-            ghost_user_id = random.choice(ghost_accounts)
-            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(dream['gorsel_prompt'])}?width=768&height=768&nologo=true"
+            # Zorunlu alanları kontrol et
+            if not dream.get('ruya_metni') or not dream.get('ozet'):
+                print(f"⚠️ Eksik alan, atlandı")
+                continue
             
-            # Sadece Groq'un verdiği alanları ekle
+            ghost_user_id = random.choice(GHOST_ACCOUNTS)
+            
+            # Görsel promptu temizle
+            gorsel_prompt = dream.get('gorsel_prompt', 'surreal dream')
+            if 'kelime' in gorsel_prompt.lower() or 'word' in gorsel_prompt.lower():
+                gorsel_prompt = 'surreal dreamlike scene, Jungian archetype, cinematic lighting, 8k'
+            
+            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(gorsel_prompt)}?width=768&height=768&nologo=true"
+            
             supabase.table('dreams').insert({
                 'user_id': ghost_user_id,
                 'content': dream['ruya_metni'],
-                'dream_date': dream['dream_date'],
-                'original_language': dream['dil'],
-                'ai_archetypes': dream['arketipler'],
-                'ai_sentiment': dream['duygu'],
+                'dream_date': dream.get('dream_date', datetime.now().strftime('%Y-%m-%d')),
+                'original_language': dream.get('dil', 'en'),
+                'ai_archetypes': dream.get('arketipler', []),
+                'ai_sentiment': dream.get('duygu', 'Unknown'),
                 'ai_summary': dream['ozet'],
-                'ai_image_prompt': dream['gorsel_prompt'],
+                'ai_image_prompt': gorsel_prompt,
                 'ai_image_url': image_url,
                 'is_bot_generated': True,
                 'location_name': dream.get('konum', 'Unknown')
-                # ai_motiv ve ai_jungian_process: Daha sonra manuel olarak eklenecek
             }).execute()
             saved += 1
             print(f"✅ Kaydedildi: {dream['ozet'][:50]}...")
@@ -269,6 +289,9 @@ def save_to_supabase(dreams):
     
     return saved
 
+# ============================================
+# 🚀 ANA FONKSİYON
+# ============================================
 def main():
     print(f"\n{'='*60}")
     print(f"[{datetime.now()}] 🌌 DREAMAP RÜYA AVI BAŞLATILIYOR")
