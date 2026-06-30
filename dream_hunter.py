@@ -289,7 +289,7 @@ def save_to_supabase(dreams):
             supabase.table('dreams').insert({
                 'user_id': ghost_user_id,
                 'content': dream['ruya_metni'],
-                'dream_date': dream_date,  # Artık geçerli tarih
+                'dream_date': dream_date,
                 'original_language': dream.get('dil', 'en'),
                 'ai_archetypes': dream.get('arketipler', []),
                 'ai_sentiment': dream.get('duygu', 'Unknown'),
@@ -297,8 +297,11 @@ def save_to_supabase(dreams):
                 'ai_image_prompt': gorsel_prompt,
                 'ai_image_url': image_url,
                 'is_bot_generated': True,
-                'location_name': dream.get('konum', 'Unknown')
+                'location_name': dream.get('konum', 'Unknown'),
+                'latitude': float(dream.get('lat', 0)) if dream.get('lat') else None,
+                'longitude': float(dream.get('lng', 0)) if dream.get('lng') else None
             }).execute()
+            
             saved += 1
             print(f"✅ Kaydedildi ({dream_date}): {dream['ozet'][:50]}...")
         except Exception as e:
