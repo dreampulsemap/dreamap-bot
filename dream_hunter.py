@@ -4,7 +4,7 @@ import os
 import re
 import random
 import time
-from datetime import datetime
+from datetime import datetime, date
 from supabase import create_client
 
 # ============================================
@@ -15,23 +15,14 @@ GROQ_KEY = os.environ.get('GROQ_KEY')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 
-# Kontrol
 if not all([SERPAPI_KEY, GROQ_KEY, SUPABASE_URL, SUPABASE_KEY]):
     print("❌ Eksik API anahtarı!")
-    print(f"SERPAPI_KEY: {'✅' if SERPAPI_KEY else '❌'}")
-    print(f"GROQ_KEY: {'✅' if GROQ_KEY else '❌'}")
-    print(f"SUPABASE_URL: {'✅' if SUPABASE_URL else '❌'}")
-    print(f"SUPABASE_KEY: {'✅' if SUPABASE_KEY else '❌'}")
     exit(1)
 
-print(f"🔑 GROQ_KEY başı: {GROQ_KEY[:10]}...")
-print(f"🔑 GROQ_KEY sonu: ...{GROQ_KEY[-10:]}")
 print(f"🔑 GROQ_KEY uzunluk: {len(GROQ_KEY)}")
 
-# Supabase client
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Hayalet hesaplar
 GHOST_ACCOUNTS = [
     '22222222-2222-2222-2222-222222222222',
     '33333333-3333-3333-3333-333333333333',
@@ -44,20 +35,43 @@ GHOST_ACCOUNTS = [
 ]
 
 # ============================================
-# 🔍 JSON AYIKLAMA
+# 🛠️ YARDIMCI FONKSİYONLAR
 # ============================================
+def parse_valid_date(date_str):
+    """Tarihi doğrula, geçersizse bugünün tarihini döndür"""
+    if not date_str or date_str.lower() in ['unknown', 'null', 'none', '']:
+        return datetime.now().strftime('%Y-%m-%d')
+    
+    # YYYY-MM-DD formatını dene
+    patterns = [
+        r'(\d{4}-\d{2}-\d{2})',
+        r'(\d{4}/\d{2}/\d{2})',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, str(date_str))
+        if match:
+            date_val = match.group(1).replace('/', '-')
+            try:
+                # Geçerli tarih mi kontrol et
+                datetime.strptime(date_val, '%Y-%m-%d')
+                return date_val
+            except:
+                continue
+    
+    # Hiçbiri çalışmazsa bugünün tarihi
+    return datetime.now().strftime('%Y-%m-%d')
+
 def extract_json_from_text(text):
     """AI yanıtından saf JSON'u ayıkla"""
     if not text:
         return None
     
-    # 1. Direkt parse
     try:
         return json.loads(text)
     except:
         pass
     
-    # 2. ```json blokları
     match = re.search(r'```(?:json)?\s*(\[[\s\S]*?\])\s*```', text)
     if match:
         try:
@@ -65,7 +79,6 @@ def extract_json_from_text(text):
         except:
             pass
     
-    # 3. [ ile başlayıp ] ile biten
     start = text.find('[')
     end = text.rfind(']')
     if start != -1 and end != -1 and start < end:
@@ -75,7 +88,6 @@ def extract_json_from_text(text):
         except:
             pass
     
-    # 4. Tek obje { }
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1 and start < end:
@@ -89,7 +101,7 @@ def extract_json_from_text(text):
     return None
 
 # ============================================
-# 🔎 SERPAPI ARAMA
+# 🔎 SERPAPI ARAMA (TIMEOUT ARTIRILDI)
 # ============================================
 def search_dreams():
     """SerpAPI ile rüya ara"""
@@ -97,13 +109,8 @@ def search_dreams():
         'I had a dream last night',
         'weird dream I had today',
         'nightmare I had last night',
-        'dream journal today',
         'I dreamed about last night',
-        'had a dream about today',
-        'strange dream last night',
-        'lucid dream experience today',
-        'I woke up from a dream',
-        'recurring dream last night'
+        'strange dream last night'
     ]
     
     all_results = []
@@ -112,7 +119,7 @@ def search_dreams():
     for query in queries:
         try:
             url = f'https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={SERPAPI_KEY}&num=10'
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=60)  # 60 saniye timeout
             data = response.json()
             
             if 'organic_results' in data:
@@ -123,9 +130,13 @@ def search_dreams():
                         seen_links.add(link)
                         all_results.append(result)
                         new_count += 1
-                print(f"✅ {new_count} yeni sonuç ({len(data['organic_results'])} toplam): {query}")
+                print(f"✅ {new_count} yeni sonuç: {query}")
             else:
                 print(f"⚠️ Sonuç yok: {query}")
+            
+            # Her sorgu arası 1 saniye bekle
+            time.sleep(1)
+            
         except Exception as e:
             print(f"❌ Hata ({query}): {e}")
     
@@ -133,7 +144,7 @@ def search_dreams():
     return all_results
 
 # ============================================
-# 🧠 GROQ ANALİZ (PARÇALI)
+# 🧠 GROQ ANALİZ (RATE LİMİT DÜZENLENDİ)
 # ============================================
 def analyze_chunk(chunk, chunk_num, total_chunks):
     """Bir parça sonucu analiz et"""
@@ -144,92 +155,90 @@ def analyze_chunk(chunk, chunk_num, total_chunks):
         for j, r in enumerate(chunk)
     ])
     
-    prompt = f"""Sen uzman bir Jungian psikolog ve rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla ve DERİNLEMESINE Jungian analizi yap.
+    prompt = f"""Sen uzman bir Jungian psikolog ve rüya analizcisisin. Aşağıdaki sonuçlardan GERÇEK rüyaları ayıkla.
 
-ÖNEMLİ: Sadece saf JSON array döndür. Başına veya sonuna HİÇBİR açıklama yazma.
+ÖNEMLİ: 
+- Sadece saf JSON array döndür
+- dream_date MUTLAKA YYYY-MM-DD formatında olmalı (örn: 2026-06-30)
+- Tarih bilinmiyorsa bugünün tarihini kullan: {datetime.now().strftime('%Y-%m-%d')}
+- "Unknown" yazma!
 
 SONUÇLAR:
 {results_text}
 
-HER RÜYA İÇİN ŞU ALANLARI DOLDUR:
-
-1. ruya_metni: Temizlenmiş rüya metni (en az 2 kelime)
-2. dream_date: Rüyanın görüldüğü tarih (YYYY-MM-DD)
-3. dil: Dil kodu (en/tr/ru/ar/es/hi/zh/de)
-4. arketipler: Jungian arketipler array'i
-5. duygu: Ana duygu (Fear/Anxiety/Awe/Joy/Confusion/Peace/Sadness/Anger/Disgust/Surprise)
-6. motiv: Rüyanın altında yatan psikolojik motivasyon (1 cümle)
-7. jungian_surec: Jungian süreç etiketleri array'i
-8. ozet: 2-3 cümlelik DERİN Jungian analiz
-9. gorsel_prompt: İngilizce AI görsel promptu (surreal, Jungian archetype, cinematic, 8k)
-10. kaynak_url: Orijinal link
-11. konum: Tahmini konum (yoksa "Unknown")
-
 JSON FORMATI:
 [
   {{
-    "ruya_metni": "...",
+    "ruya_metni": "Temizlenmiş rüya metni",
     "dream_date": "YYYY-MM-DD",
-    "dil": "en",
+    "dil": "en/tr/ru/ar/es/hi/zh/de",
     "arketipler": ["Shadow", "Snake"],
-    "duygu": "Fear",
-    "motiv": "Bilinçdışındaki bastırılmış korkuların yüzeye çıkması",
+    "duygu": "Fear/Anxiety/Awe/Joy/Confusion/Peace/Sadness/Anger/Surprise",
+    "motiv": "1 cümlelik psikolojik motivasyon",
     "jungian_surec": ["Shadow Integration", "Transformation"],
-    "ozet": "Bu rüya, Shadow arketipinin Snake sembolü üzerinden yüzeye çıkışını temsil eder...",
-    "gorsel_prompt": "surreal dark forest giant snake...",
-    "kaynak_url": "...",
-    "konum": "Unknown"
+    "ozet": "2-3 cümlelik Jungian analiz",
+    "gorsel_prompt": "surreal Jungian cinematic 8k",
+    "kaynak_url": "link",
+    "konum": "City, Country"
   }}
 ]
 
-Sadece JSON array döndür. Rüya yoksa [] döndür."""
+Sadece JSON array döndür."""
     
-    try:
-        response = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + GROQ_KEY
-            },
-            json={
-                'model': 'llama-3.1-8b-instant',
-                'messages': [{'role': 'user', 'content': prompt}],
-                'temperature': 0.3,
-                'max_tokens': 4000
-            },
-            timeout=60
-        )
-        
-        if response.status_code != 200:
-            print(f"❌ Groq API hatası: {response.status_code}")
+    # Rate limit için tekrar deneme
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + GROQ_KEY
+                },
+                json={
+                    'model': 'llama-3.1-8b-instant',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'temperature': 0.3,
+                    'max_tokens': 4000
+                },
+                timeout=60
+            )
+            
+            if response.status_code == 429:
+                wait_time = 30 * (attempt + 1)  # 30, 60, 90 saniye
+                print(f"⏳ Rate limit, {wait_time} saniye bekleniyor (deneme {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+                continue
+            
+            if response.status_code != 200:
+                print(f"❌ Groq API hatası: {response.status_code}")
+                return []
+            
+            data = response.json()
+            content = data['choices'][0]['message']['content']
+            
+            result = extract_json_from_text(content)
+            if result is None:
+                print(f"⚠️ Parça {chunk_num}: JSON ayıklanamadı")
+                return []
+            
+            dreams = result if isinstance(result, list) else result.get('dreams', [])
+            print(f"✅ Parça {chunk_num}: {len(dreams)} rüya bulundu")
+            return dreams
+            
+        except Exception as e:
+            print(f"❌ Parça {chunk_num} hatası: {e}")
             return []
-        
-        data = response.json()
-        content = data['choices'][0]['message']['content']
-        
-        print(f"📝 Parça {chunk_num} yanıtı (ilk 200 karakter): {content[:200]}")
-        
-        result = extract_json_from_text(content)
-        
-        if result is None:
-            print(f"⚠️ Parça {chunk_num}: JSON ayıklanamadı")
-            return []
-        
-        dreams = result if isinstance(result, list) else result.get('dreams', [])
-        print(f"✅ Parça {chunk_num}: {len(dreams)} rüya bulundu")
-        return dreams
-        
-    except Exception as e:
-        print(f"❌ Parça {chunk_num} hatası: {e}")
-        return []
+    
+    return []
 
 def analyze_with_groq(results):
-    """Groq ile rüyaları analiz et - PARÇALI ANALİZ"""
+    """Groq ile rüyaları analiz et - PARÇALI"""
     if not results:
         return []
     
     all_dreams = []
-    chunk_size = 10
+    chunk_size = 15  # Daha az parça
     total_chunks = (len(results) + chunk_size - 1) // chunk_size
     
     for i in range(0, len(results), chunk_size):
@@ -239,31 +248,35 @@ def analyze_with_groq(results):
         dreams = analyze_chunk(chunk, chunk_num, total_chunks)
         all_dreams.extend(dreams)
         
-        # Rate limit için bekle
+        # Parçalar arası 30 saniye bekle (rate limit için)
         if i + chunk_size < len(results):
-            print("⏳ 2 saniye bekleniyor...")
-            time.sleep(2)
+            print("⏳ 30 saniye bekleniyor (rate limit)...")
+            time.sleep(30)
     
     print(f"\n🎯 Toplam {len(all_dreams)} rüya bulundu")
     return all_dreams
 
 # ============================================
-# 💾 SUPABASE'E KAYDET
+# 💾 SUPABASE'E KAYDET (TARİH DOĞRULAMA)
 # ============================================
 def save_to_supabase(dreams):
     """Rüyaları Supabase'e kaydet"""
     saved = 0
     for dream in dreams:
         try:
-            # Zorunlu alanları kontrol et
             if not dream.get('ruya_metni') or not dream.get('ozet'):
                 print(f"⚠️ Eksik alan, atlandı")
                 continue
             
             ghost_user_id = random.choice(GHOST_ACCOUNTS)
             
+            # TARİH DOĞRULAMA - KRİTİK!
+            dream_date = parse_valid_date(dream.get('dream_date'))
+            
             # Görsel promptu temizle
             gorsel_prompt = dream.get('gorsel_prompt', 'surreal dream')
+            if not gorsel_prompt or len(gorsel_prompt) < 10:
+                gorsel_prompt = 'surreal dreamlike scene, Jungian archetype, cinematic lighting, 8k'
             if 'kelime' in gorsel_prompt.lower() or 'word' in gorsel_prompt.lower():
                 gorsel_prompt = 'surreal dreamlike scene, Jungian archetype, cinematic lighting, 8k'
             
@@ -272,7 +285,7 @@ def save_to_supabase(dreams):
             supabase.table('dreams').insert({
                 'user_id': ghost_user_id,
                 'content': dream['ruya_metni'],
-                'dream_date': dream.get('dream_date', datetime.now().strftime('%Y-%m-%d')),
+                'dream_date': dream_date,  # Artık geçerli tarih
                 'original_language': dream.get('dil', 'en'),
                 'ai_archetypes': dream.get('arketipler', []),
                 'ai_sentiment': dream.get('duygu', 'Unknown'),
@@ -283,7 +296,7 @@ def save_to_supabase(dreams):
                 'location_name': dream.get('konum', 'Unknown')
             }).execute()
             saved += 1
-            print(f"✅ Kaydedildi: {dream['ozet'][:50]}...")
+            print(f"✅ Kaydedildi ({dream_date}): {dream['ozet'][:50]}...")
         except Exception as e:
             print(f"❌ Kaydetme hatası: {e}")
     
@@ -297,25 +310,22 @@ def main():
     print(f"[{datetime.now()}] 🌌 DREAMAP RÜYA AVI BAŞLATILIYOR")
     print(f"{'='*60}\n")
     
-    # 1. Web'i tara
     print("🔍 SerpAPI ile web taranıyor...")
     results = search_dreams()
     print(f"✅ Toplam {len(results)} sonuç bulundu\n")
     
     if not results:
-        print("⚠️ Hiç sonuç bulunamadı, çıkılıyor.")
+        print("⚠️ Hiç sonuç bulunamadı.")
         return
     
-    # 2. Groq ile analiz et
     print("🧠 Groq ile rüyalar analiz ediliyor...")
     dreams = analyze_with_groq(results)
     print(f"✅ {len(dreams)} rüya analiz edildi\n")
     
     if not dreams:
-        print("⚠️ Hiç rüya bulunamadı, çıkılıyor.")
+        print("⚠️ Hiç rüya bulunamadı.")
         return
     
-    # 3. Supabase'e kaydet
     print("💾 Rüyalar Supabase'e kaydediliyor...")
     saved = save_to_supabase(dreams)
     print(f"✅ {saved} rüya başarıyla kaydedildi\n")
